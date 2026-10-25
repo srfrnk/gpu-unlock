@@ -6,12 +6,13 @@ The objective of this project was to test, install, configure, validate, and ben
 
 On consumer GA102 silicon, NVIDIA enforces an artificial half-rate instruction issue throttle on FP16/BF16 tensor core instructions. The `gpu-unlock` Linux kernel module sets hardware speed selection registers (`SS0=0x88888888`, `SS1=0x8`) during early userspace boot via `initramfs` before the proprietary `nvidia.ko` driver attaches, attempting to unlock professional-equivalent full instruction issue rates without requiring permanent vBIOS flashing.
 
-### Final Technical Finding
-Following comprehensive testing across three distinct iterations (warm boot, cold boot with recursive firmware inclusion, and cold boot in clean text console mode with Plymouth disabled), **the pre-driver kernel module cannot function on an RTX 3090 when it serves as the sole, primary physical display adapter**:
-* When `gpu_unlock` issues a PCIe Function-Level Reset (`pcie_flr`) during early initramfs to apply the speed selection registers, it forcibly tears down the PCIe bus state while the motherboard UEFI GOP (Graphics Output Protocol) firmware and Intel PCIe root port (`00:01.0`) are actively arbitrating the active display pipe.
-* This results in an immediate PCIe bus hang / hardware freeze before the Linux kernel can hand off control to `nvidia-drm` or write crash logs to disk.
-* **Safe Architecture Requirement**: The `gpu-unlock` Linux kernel module is viable strictly on **headless systems, secondary compute GPUs, or virtualized passthrough (`vfio-pci`) setups**, but is incompatible with single-GPU workstations where the target card is the primary display.
-* **Preservation & Reversal**: The emergency recovery script [`scripts/reversal_recovery.sh`](file:///mnt/data/code/gpu-unlock/scripts/reversal_recovery.sh) was battle-tested across all three failed boots, successfully restoring normal system operation with 100% hardware, driver, and filesystem integrity each time.
+### Final Technical Finding & Incompatibility Verdict
+Following comprehensive testing across four distinct hardware and software configurations, **the `gpu-unlock` pre-driver method is fundamentally incompatible with an RTX 3090 acting as the sole, primary physical display adapter**:
+1. **PCIe Bus Lockup**: When `gpu_unlock` issues a PCIe Function-Level Reset (`pcie_flr()`) during early initramfs to apply the speed selection registers, it forcibly tears down the PCIe bus state while the motherboard UEFI GOP (Graphics Output Protocol) firmware and Intel PCIe root port (`00:01.0`) hold active display arbitration, causing a hard hardware hang.
+2. **Text Console / Framebuffer Bypasses Fail**: Suppressing Plymouth (`plymouth.enable=0`) and running in pure text mode still freezes at the PCIe controller level during `pcie_flr()`.
+3. **Motherboard BIOS Hand-off Failure**: Attempting to route early POST video to the integrated CPU graphics (`IGFX`) on the Gigabyte B460M D3H motherboard while a discrete PEG card is installed results in total loss of video signal across both motherboard and GPU outputs, requiring a physical CMOS jumper reset.
+4. **Architectural Scope**: The `gpu-unlock` kernel module is viable strictly on **headless servers, secondary compute cards (with display driven by an active separate GPU), or virtualized passthrough (`vfio-pci`) setups**, but cannot be safely deployed on single-GPU desktop workstations.
+5. **Preservation & Reversal**: The emergency recovery script [`scripts/reversal_recovery.sh`](file:///mnt/data/code/gpu-unlock/scripts/reversal_recovery.sh) proved 100% reliable across all recovery attempts, cleanly restoring factory driver operation and OS boot with zero filesystem or hardware degradation.
 
 ---
 
@@ -20,31 +21,30 @@ Following comprehensive testing across three distinct iterations (warm boot, col
 ### Technical Invariants
 * **EEPROM / VBIOS Safety Invariant**: The module only reads physical ROM (`NV_PROM_DATA` via `work->bar + 0x300000`). It contains zero SPI flash programming or erase opcodes. The physical card remained completely protected.
 * **Volatility Invariant**: Register states are volatile. A power cycle or removing boot arguments completely returns silicon to factory defaults.
-* **Explicit Target Guard**: The module remains inactive unless explicitly triggered via `gpu_unlock.targets=`.
+* **Explicit Target Guard**: The module remains inactive unless explicitly triggered via `gpu_unlock.targets=0000:01:00.0`.
 
-### Risk Matrix & Findings
+### Risk Matrix & Tested Outcomes
 
-| Risk Domain | Failure Mode | Observed Behavior | Severity | Resolution / Outcome |
-| :--- | :--- | :--- | :--- | :--- |
-| **Primary Display** | Black screen / PCIe bus hang | Early `pcie_flr` kills the active display pipe before `nvidia-drm` binds. | Critical | Incompatible on single-card primary display setups. |
-| **Dracut Modprobe** | Missing driver resolution | DKMS `updates/dkms/` was unindexed by early Dracut pre-udev modprobe. | Resolved | Fixed via direct native kernel tree installation (`kernel/drivers/gpu/drm/`). |
-| **Firmware Subdir** | Missing Falcon blobs in initrd | Dracut `install_items` didn't recurse into `610.43.03/`. | Resolved | Fixed via explicit wildcard `install_items+=" /usr/lib/firmware/gpu-unlock/610.43.03/* "`. |
-| **System Sleep** | Post-suspend panic | S3 suspend attempts to re-run unlock on a live card. | Mitigated | Masked all systemd sleep targets globally. |
-| **Physical HW** | Hardware damage / corruption | None. Card, VBIOS, and drivers remained 100% intact. | None | Verified with `nvidia-smi` post-reversal. |
+| Configuration Tested | Failure Mode Observed | Severity | Recovery Method |
+| :--- | :--- | :--- | :--- |
+| **Warm Reboot (`initramfs`)** | Pre-udev modprobe unindexed path | Medium | `reversal_recovery.sh` via root recovery console |
+| **Cold Boot (`initramfs` + firmware)** | PCIe bus hang during FLR | Critical | `reversal_recovery.sh` via root recovery console |
+| **Text Console Boot (`plymouth.enable=0`)** | Root port 00:01.0 hardware freeze | Critical | `reversal_recovery.sh` via root recovery console |
+| **BIOS `IGFX` Boot Routing** | Total display output drop across all ports | Critical | Full physical motherboard CMOS reset (`CLR_CMOS`) |
 
 ---
 
 ## 3. Emergency Reversal Procedure
 
-The automated recovery script [`scripts/reversal_recovery.sh`](file:///mnt/data/code/gpu-unlock/scripts/reversal_recovery.sh) has been verified and hardened:
+The automated recovery script [`scripts/reversal_recovery.sh`](file:///mnt/data/code/gpu-unlock/scripts/reversal_recovery.sh) is verified and permanently maintained in the repository:
 
 ```bash
 sudo /mnt/data/code/gpu-unlock/scripts/reversal_recovery.sh
 ```
 
-### Actions Executed on Rollback:
+### Complete Actions Executed on Rollback:
 1. **GRUB Cleansing**: Strips `gpu_unlock.*`, `nvidia-drm.modeset`, and `plymouth.enable=0`, and restores standard `quiet splash`.
-2. **Native Module & DKMS Purge**: Removes `/lib/modules/$(uname -r)/kernel/drivers/gpu/drm/gpu_unlock.ko*` and uninstalls DKMS module `gpu-unlock/1.0.0`.
+2. **Native Module & DKMS Purge**: Removes all `gpu_unlock.ko*` binaries from `/lib/modules/$(uname -r)/` and uninstalls DKMS packages.
 3. **Dracut Drop-in Eviction**: Deletes `/etc/dracut.conf.d/gpu-unlock.conf` and `/usr/lib/dracut/dracut.conf.d/gpu-unlock.conf`.
 4. **Firmware & Source Purge**: Deletes `/usr/lib/firmware/gpu-unlock` and `/usr/src/gpu-unlock-1.0.0`.
 5. **Depmod Refresh**: Runs `depmod -a $(uname -r)` to cleanly restore the kernel module index.
@@ -53,7 +53,7 @@ sudo /mnt/data/code/gpu-unlock/scripts/reversal_recovery.sh
 
 ---
 
-## 4. Pre-Unlock Baseline Benchmark Results
+## 4. Pre-Unlock Baseline Benchmark Metrics
 
 Recorded under strict environmental invariants (persistence mode enabled, core clock locked to 1700 MHz, uniform power limit 350W):
 
@@ -81,32 +81,19 @@ Output file: [`benchmarks/baseline_llm.json`](file:///mnt/data/code/gpu-unlock/b
 
 ---
 
-## 5. Iterative Test Log & Post-Mortem Chronology
+## 5. Iterative Test Log & Failure Chronology
 
 ```mermaid
 flowchart TD
-    A["Attempt 1: Warm Reboot (DKMS default)"] -->|Failure: modprobe FATAL error & blank screen| B["Reversal Script Executed: Clean Boot Restored"]
+    A["Attempt 1: Warm Reboot (DKMS default)"] -->|Failure: modprobe FATAL error & blank screen| B["Recovery: Clean Boot Restored"]
     B --> C["Attempt 2: Cold Boot + Recursive Firmware Inclusion"]
-    C -->|Failure: Display framebuffer lockup during FLR| D["Reversal Script Executed: Clean Boot Restored"]
+    C -->|Failure: Display framebuffer lockup during FLR| D["Recovery: Clean Boot Restored"]
     D --> E["Attempt 3: Text Console Boot (plymouth.enable=0) + Direct In-Tree Kernel Module"]
-    E -->|Failure: Hard PCIe bus freeze during pcie_flr| F["Reversal Script Executed: Clean Boot Restored"]
-    F --> G["Final Analysis: Primary Display Incompatibility Documented"]
+    E -->|Failure: Hard PCIe bus freeze on root port 00:01.0| F["Recovery: Clean Boot Restored"]
+    F --> G["Attempt 4: Motherboard BIOS IGFX POST Hand-off"]
+    G -->|Failure: Total display signal cut across all headers; CMOS reset required| H["Recovery: CMOS Cleared & System Restored"]
+    H --> I["Final Verdict: Incompatible on single-GPU primary display workstations"]
 ```
-
-### Detailed Attempt Logs:
-1. **Attempt 1 (Warm Reboot)**:
-   - Module placed in DKMS default path. System failed to boot.
-   - Journal log revealed: `dracut-pre-udev: modprobe: FATAL: Module gpu_unlock not found in directory /lib/modules/7.0.0-38-generic`.
-   - Restored via recovery mode using `reversal_recovery.sh`.
-2. **Attempt 2 (Cold Power-off Boot + Explicit Firmware Inclusion)**:
-   - Fixed firmware path to `/usr/lib/firmware/gpu-unlock/610.43.03/*`. Executed a full 10-second cold shutdown.
-   - System froze during early boot with a black screen before the journal filesystem mounted.
-   - Restored via recovery mode using `reversal_recovery.sh`.
-3. **Attempt 3 (Cold Power-off Boot + Text Console + In-Tree Kernel Module)**:
-   - Installed uncompressed module directly into `/lib/modules/$(uname -r)/kernel/drivers/gpu/drm/gpu_unlock.ko`.
-   - Disabled Plymouth completely (`plymouth.enable=0`, removed `quiet splash`). Verified payload with `lsinitrd`.
-   - Cold reboot froze during early initramfs. Zero journal entries written, confirming a hard PCIe bus controller hang triggered by `pcie_flr()` while the Intel PCIe root port (`00:01.0`) held active UEFI GOP display lines.
-   - Restored via recovery mode using `reversal_recovery.sh`.
 
 ---
 
@@ -115,7 +102,7 @@ flowchart TD
 All created benchmark and recovery tools remain intact and functional in the repository:
 
 - [`scripts/reversal_recovery.sh`](file:///mnt/data/code/gpu-unlock/scripts/reversal_recovery.sh) — Emergency reversal script for instant restoration.
-- [`scripts/install_and_configure.sh`](file:///mnt/data/code/gpu-unlock/scripts/install_and_configure.sh) — Fully automated deployment script (suitable if a secondary GPU is attached).
+- [`scripts/prepare_option1.sh`](file:///mnt/data/code/gpu-unlock/scripts/prepare_option1.sh) — Setup script for secondary or headless environments.
 - [`scripts/set_benchmark_invariants.sh`](file:///mnt/data/code/gpu-unlock/scripts/set_benchmark_invariants.sh) — Clocks locked to 1700 MHz, persistence mode, 350W power cap.
 - [`scripts/reset_benchmark_invariants.sh`](file:///mnt/data/code/gpu-unlock/scripts/reset_benchmark_invariants.sh) — Restores dynamic GPU clocks and power limits.
 - [`benchmarks/bench_gemm.py`](file:///mnt/data/code/gpu-unlock/benchmarks/bench_gemm.py) — Standalone PyTorch CUDA GEMM benchmark suite.
