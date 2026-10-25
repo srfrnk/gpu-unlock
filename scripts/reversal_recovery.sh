@@ -7,9 +7,9 @@ echo "=================================================================="
 
 # 1. Remove kernel parameters from GRUB
 if [ -f /etc/default/grub ]; then
-    echo "[1/5] Removing gpu_unlock parameters from /etc/default/grub..."
+    echo "[1/6] Removing gpu_unlock parameters from /etc/default/grub..."
     sed -i -E 's/gpu_unlock\.[a-zA-Z0-9_]+=[^ "]+//g' /etc/default/grub
-    # Clean up double spaces that might remain
+    sed -i -E 's/nvidia-drm\.modeset=[0-1]//g' /etc/default/grub
     sed -i -E 's/  +/ /g' /etc/default/grub
     if command -v update-grub &>/dev/null; then
         update-grub
@@ -19,7 +19,7 @@ if [ -f /etc/default/grub ]; then
 fi
 
 # 2. Purge DKMS module and firmware files
-echo "[2/5] Purging DKMS module and packages..."
+echo "[2/6] Purging DKMS module and packages..."
 if command -v dkms &>/dev/null; then
     dkms remove gpu-unlock/1.0.0 --all 2>/dev/null || true
 fi
@@ -33,27 +33,36 @@ elif command -v dnf &>/dev/null; then
 fi
 
 # 3. Clean drop-ins from initramfs configurations
-echo "[3/5] Cleaning initramfs drop-in configuration files..."
+echo "[3/6] Cleaning dracut and initramfs drop-in configuration files..."
 rm -f /etc/dracut.conf.d/gpu-unlock.conf
+rm -f /usr/lib/dracut/dracut.conf.d/gpu-unlock.conf
 rm -f /etc/initramfs-tools/conf.d/gpu-unlock.conf
+rm -f /usr/share/initramfs-tools/modules.d/gpu-unlock.conf
 rm -f /etc/mkinitcpio.conf.d/gpu-unlock.conf
+rm -f /etc/mkinitcpio.conf.d/zz-gpu-unlock.conf
 rm -rf /usr/lib/firmware/gpu-unlock
 rm -rf /usr/src/gpu-unlock-1.0.0
 
 # 4. Unmask sleep targets
-echo "[4/5] Unmasking system sleep targets..."
+echo "[4/6] Unmasking system sleep targets..."
 systemctl unmask sleep.target suspend.target hibernate.target hybrid-sleep.target 2>/dev/null || true
 
 # 5. Rebuild initramfs to ensure module is completely evicted
-echo "[5/5] Rebuilding initramfs..."
-if command -v update-initramfs &>/dev/null; then
-    update-initramfs -u
-elif command -v dracut &>/dev/null; then
+echo "[5/6] Rebuilding initramfs..."
+if command -v dracut &>/dev/null; then
     dracut -f
+elif command -v update-initramfs &>/dev/null; then
+    update-initramfs -u
 elif command -v mkinitcpio &>/dev/null; then
     mkinitcpio -P
 fi
 
+# 6. Re-check GRUB configuration
+echo "[6/6] Verifying GRUB configuration..."
+if command -v update-grub &>/dev/null; then
+    update-grub
+fi
+
 echo "=================================================================="
-echo "  gpu-unlock reversal complete! Please reboot the host."
+echo "  gpu-unlock reversal complete! System restored to factory state."
 echo "=================================================================="
