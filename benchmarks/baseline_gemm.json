@@ -1,0 +1,158 @@
+{
+  "device_name": "NVIDIA GeForce RTX 3090",
+  "timestamp": 1792913311.317273,
+  "benchmarks": {
+    "BF16": [
+      {
+        "m": 2048,
+        "n": 2048,
+        "k": 2048,
+        "latency_ms": 0.285,
+        "tflops": 60.23,
+        "telemetry": {
+          "temperature_c": 42.0,
+          "power_w": 62.69,
+          "clock_mhz": 1710.0
+        }
+      },
+      {
+        "m": 4096,
+        "n": 4096,
+        "k": 4096,
+        "latency_ms": 2.274,
+        "tflops": 60.44,
+        "telemetry": {
+          "temperature_c": 43.0,
+          "power_w": 112.69,
+          "clock_mhz": 1710.0
+        }
+      },
+      {
+        "m": 8192,
+        "n": 8192,
+        "k": 8192,
+        "latency_ms": 15.694,
+        "tflops": 70.06,
+        "telemetry": {
+          "temperature_c": 51.0,
+          "power_w": 173.51,
+          "clock_mhz": 1710.0
+        }
+      }
+    ],
+    "FP16": [
+      {
+        "m": 2048,
+        "n": 2048,
+        "k": 2048,
+        "latency_ms": 0.285,
+        "tflops": 60.29,
+        "telemetry": {
+          "temperature_c": 45.0,
+          "power_w": 211.78,
+          "clock_mhz": 1710.0
+        }
+      },
+      {
+        "m": 4096,
+        "n": 4096,
+        "k": 4096,
+        "latency_ms": 2.249,
+        "tflops": 61.12,
+        "telemetry": {
+          "temperature_c": 46.0,
+          "power_w": 114.66,
+          "clock_mhz": 1710.0
+        }
+      },
+      {
+        "m": 8192,
+        "n": 8192,
+        "k": 8192,
+        "latency_ms": 16.041,
+        "tflops": 68.55,
+        "telemetry": {
+          "temperature_c": 52.0,
+          "power_w": 209.43,
+          "clock_mhz": 1680.0
+        }
+      }
+    ],
+    "TF32 (FP32)": [
+      {
+        "m": 2048,
+        "n": 2048,
+        "k": 2048,
+        "latency_ms": 0.657,
+        "tflops": 26.15,
+        "telemetry": {
+          "temperature_c": 46.0,
+          "power_w": 203.65,
+          "clock_mhz": 1710.0
+        }
+      },
+      {
+        "m": 4096,
+        "n": 4096,
+        "k": 4096,
+        "latency_ms": 4.461,
+        "tflops": 30.81,
+        "telemetry": {
+          "temperature_c": 49.0,
+          "power_w": 126.11,
+          "clock_mhz": 1710.0
+        }
+      },
+      {
+        "m": 8192,
+        "n": 8192,
+        "k": 8192,
+        "latency_ms": 31.648,
+        "tflops": 34.74,
+        "telemetry": {
+          "temperature_c": 53.0,
+          "power_w": 269.98,
+          "clock_mhz": 1710.0
+        }
+      }
+    ],
+    "FP32 (no TF32)": [
+      {
+        "m": 2048,
+        "n": 2048,
+        "k": 2048,
+        "latency_ms": 0.777,
+        "tflops": 22.11,
+        "telemetry": {
+          "temperature_c": 47.0,
+          "power_w": 133.78,
+          "clock_mhz": 1710.0
+        }
+      },
+      {
+        "m": 4096,
+        "n": 4096,
+        "k": 4096,
+        "latency_ms": 5.856,
+        "tflops": 23.47,
+        "telemetry": {
+          "temperature_c": 46.0,
+          "power_w": 119.56,
+          "clock_mhz": 1710.0
+        }
+      },
+      {
+        "m": 8192,
+        "n": 8192,
+        "k": 8192,
+        "latency_ms": 47.047,
+        "tflops": 23.37,
+        "telemetry": {
+          "temperature_c": 56.0,
+          "power_w": 337.69,
+          "clock_mhz": 1470.0
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "model": "qwen3.8:27b-q4_K_M",
+  "timestamp": 1792913334.931504,
+  "tasks": [
+    {
+      "label": "Task 1: Code Gen (Short)",
+      "prompt_tokens": 83,
+      "generated_tokens": 256,
+      "prefill_tok_per_sec": 673.42,
+      "decode_tok_per_sec": 41.84,
+      "trials_prefill": [
+        647.3,
+        678.56,
+        679.88,
+        673.42,
+        671.52
+      ],
+      "trials_decode": [
+        41.84,
+        41.61,
+        41.99,
+        41.57,
+        41.95
+      ],
+      "telemetry": {
+        "temperature_c": 66.0,
+        "power_w": 334.17,
+        "clock_mhz": 1560.0
+      },
+      "sample": "..."
+    },
+    {
+      "label": "Task 2: Analysis (Medium)",
+      "prompt_tokens": 390,
+      "generated_tokens": 300,
+      "prefill_tok_per_sec": 3078.99,
+      "decode_tok_per_sec": 41.0,
+      "trials_prefill": [
+        954.47,
+        3160.91,
+        3078.99,
+        3142.02,
+        3064.35
+      ],
+      "trials_decode": [
+        40.81,
+        41.02,
+        40.87,
+        41.23,
+        41.0
+      ],
+      "telemetry": {
+        "temperature_c": 69.0,
+        "power_w": 334.26,
+        "clock_mhz": 1545.0
+      },
+      "sample": "..."
+    },
+    {
+      "label": "Task 3: Needle Extr (Long)",
+      "prompt_tokens": 12614,
+      "generated_tokens": 128,
+      "prefill_tok_per_sec": 100515.57,
+      "decode_tok_per_sec": 39.56,
+      "trials_prefill": [
+        1229.55,
+        100515.57,
+        99605.18,
+        101979.11,
+        100941.07
+      ],
+      "trials_decode": [
+        39.55,
+        39.56,
+        39.59,
+        39.52,
+        39.59
+      ],
+      "telemetry": {
+        "temperature_c": 70.0,
+        "power_w": 333.93,
+        "clock_mhz": 1515.0
+      },
+      "sample": "..."
+    },
+    {
+      "label": "Task 4: Synthesis (Extreme)",
+      "prompt_tokens": 12998,
+      "generated_tokens": 400,
+      "prefill_tok_per_sec": 99846.37,
+      "decode_tok_per_sec": 39.3,
+      "trials_prefill": [
+        1220.34,
+        103030.35,
+        99301.73,
+        101730.47,
+        99846.37
+      ],
+      "trials_decode": [
+        39.33,
+        39.22,
+        39.36,
+        39.1,
+        39.3
+      ],
+      "telemetry": {
+        "temperature_c": 71.0,
+        "power_w": 333.59,
+        "clock_mhz": 1575.0
+      },
+      "sample": "..."
+    }
+  ]
+}
