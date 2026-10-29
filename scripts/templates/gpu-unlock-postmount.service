@@ -1,0 +1,14 @@
+[Unit]
+Description=Fail-Safe Post-Mount GPU Speed Unlock Service
+DefaultDependencies=no
+After=local-fs.target systemd-modules-load.service systemd-journald.service
+Before=display-manager.service gdm.service lightdm.service plymouth-quit.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/gpu-unlock-postmount.sh
+RemainAfterExit=yes
+TimeoutSec=30
+
+[Install]
+WantedBy=sysinit.target
