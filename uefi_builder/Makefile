@@ -1,6 +1,6 @@
 CC = clang
 LD = lld-link
-CFLAGS = -target x86_64-unknown-windows -nostdlib -ffreestanding -fno-builtin -fno-stack-protector -mno-red-zone -fshort-wchar -Os -Wall -Wextra -I ../uefi_src/deps/edk2/MdePkg/Include -I ../uefi_src/deps/edk2/MdePkg/Include/X64
+CFLAGS = -target x86_64-unknown-windows -nostdlib -ffreestanding -fno-builtin -fno-stack-protector -mno-red-zone -fshort-wchar -Os -Wall -Wextra -Wno-unused-parameter
 LDFLAGS = -Wl,-subsystem:efi_application -Wl,-entry:efi_main
 
 TARGET = BOOTX64.EFI
