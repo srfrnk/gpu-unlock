@@ -3,6 +3,7 @@
 #include <Protocol/SimpleFileSystem.h>
 #include <Protocol/GraphicsOutput.h>
 #include <Protocol/PciIo.h>
+#include <Guid/FileInfo.h>
 #include <IndustryStandard/Pci.h>
 
 #define TARGET_PCI_VENDOR_ID 0x10DE
@@ -16,11 +17,30 @@
 
 static EFI_SYSTEM_TABLE     *gST = NULL;
 static EFI_BOOT_SERVICES    *gBS = NULL;
+static EFI_FILE_PROTOCOL    *gLogFile = NULL;
+
+static void LogStr(const char *Str) {
+    if (gLogFile) {
+        UINTN Len = 0;
+        while (Str[Len]) Len++;
+        gLogFile->Write(gLogFile, &Len, (VOID *)Str);
+        gLogFile->Flush(gLogFile);
+    }
+}
 
 static void Print(CHAR16 *Msg) {
     if (gST && gST->ConOut) {
         gST->ConOut->OutputString(gST->ConOut, Msg);
     }
+    // Also log to ascii
+    char Ascii[256];
+    UINTN i = 0;
+    while (Msg[i] && i < 254) {
+        Ascii[i] = (char)Msg[i];
+        i++;
+    }
+    Ascii[i] = '\0';
+    LogStr(Ascii);
 }
 
 static void PrintHex(UINT32 Val) {
@@ -35,6 +55,31 @@ static void PrintHex(UINT32 Val) {
     Print(Buf);
 }
 
+static void InitLogFile(EFI_HANDLE ImageHandle) {
+    EFI_LOADED_IMAGE_PROTOCOL *LoadedImage = NULL;
+    EFI_GUID LoadedImageGuid = EFI_LOADED_IMAGE_PROTOCOL_GUID;
+    EFI_GUID SimpleFileSystemGuid = EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID;
+    EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *FileSystem = NULL;
+    EFI_FILE_PROTOCOL *Root = NULL;
+
+    EFI_STATUS Status = gBS->HandleProtocol(ImageHandle, &LoadedImageGuid, (VOID **)&LoadedImage);
+    if (!EFI_ERROR(Status) && LoadedImage) {
+        Status = gBS->HandleProtocol(LoadedImage->DeviceHandle, &SimpleFileSystemGuid, (VOID **)&FileSystem);
+        if (!EFI_ERROR(Status) && FileSystem) {
+            Status = FileSystem->OpenVolume(FileSystem, &Root);
+            if (!EFI_ERROR(Status) && Root) {
+                Root->Open(
+                    Root,
+                    &gLogFile,
+                    L"\\GPU_UNLOCK_LOG.TXT",
+                    EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE,
+                    0
+                );
+            }
+        }
+    }
+}
+
 EFI_STATUS
 EFIAPI
 efi_main (
@@ -46,6 +91,8 @@ efi_main (
 
     // Reset watchdog timer to 15 seconds to ensure host resets if link hangs
     gBS->SetWatchdogTimer(15, 0x0000, 0, NULL);
+
+    InitLogFile(ImageHandle);
 
     Print(L"\r\n======================================================\r\n");
     Print(L"  Custom Pre-Boot GPU Unlocker: MMIO Selector Probe   \r\n");
@@ -196,6 +243,10 @@ efi_main (
 
     Print(L"\r\n[*] Disarming watchdog timer...\r\n");
     gBS->SetWatchdogTimer(0, 0x0000, 0, NULL);
+
+    if (gLogFile) {
+        gLogFile->Close(gLogFile);
+    }
 
     Print(L"[*] Finished. Exiting to boot manager in 5 seconds...\r\n");
     gBS->Stall(5000000);
