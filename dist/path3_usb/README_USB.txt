@@ -10,5 +10,5 @@ Guarantees:
 
 Usage:
 1. Plug in a FAT32-formatted USB thumb drive.
-2. Copy the EFI/ directory from this folder to the root of the USB drive.
+2. Copy the contents of this folder (or run: sudo ./scripts/build_path3_usb_bundle.sh /media/$USER/GPU_UNLOCK)
 3. Reboot and press F12 (Gigabyte Boot Menu) to select the USB drive.
