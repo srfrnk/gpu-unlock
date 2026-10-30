@@ -9,6 +9,11 @@
 #define TARGET_PCI_DEVICE_ID 0x2204
 #define TARGET_PCI_SUBSYS_ID 0x39753842 // EVGA FTW3 Ultra 3090
 
+#define GU_FEAT_SS0_OFFSET   0x0082381cU
+#define GU_FEAT_SS1_OFFSET   0x00823820U
+#define GU_SS0_UNLOCK        0x88888888U
+#define GU_SS1_UNLOCK        0x00000008U
+
 static EFI_SYSTEM_TABLE     *gST = NULL;
 static EFI_BOOT_SERVICES    *gBS = NULL;
 
@@ -43,13 +48,13 @@ efi_main (
     gBS->SetWatchdogTimer(15, 0x0000, 0, NULL);
 
     Print(L"\r\n======================================================\r\n");
-    Print(L"  Custom Pre-Boot GPU Unlocker & Safe Chainloader     \r\n");
+    Print(L"  Custom Pre-Boot GPU Unlocker: MMIO Selector Probe   \r\n");
     Print(L"  Host: Intel i9-10900 / Gigabyte B460M D3H          \r\n");
     Print(L"  Target: EVGA RTX 3090 (10DE:2204, Subsys 3842:3975)\r\n");
     Print(L"======================================================\r\n\r\n");
 
     Print(L"[*] Active hardware safety: 15-second watchdog timer armed.\r\n");
-    Print(L"[*] Scanning PCI bus for NVIDIA GA102...\r\n");
+    Print(L"[*] Locating NVIDIA GA102 on PCI bus...\r\n");
 
     EFI_STATUS Status;
     EFI_HANDLE *HandleBuffer = NULL;
@@ -70,6 +75,7 @@ efi_main (
     }
 
     BOOLEAN FoundTarget = FALSE;
+    EFI_PCI_IO_PROTOCOL *TargetPciIo = NULL;
     UINTN TargetSegment, TargetBus, TargetDevice, TargetFunction;
 
     for (UINTN i = 0; i < HandleCount; i++) {
@@ -91,9 +97,10 @@ efi_main (
             PciConfig.Hdr.DeviceId == TARGET_PCI_DEVICE_ID) {
             
             FoundTarget = TRUE;
+            TargetPciIo = PciIo;
             PciIo->GetLocation(PciIo, &TargetSegment, &TargetBus, &TargetDevice, &TargetFunction);
             
-            Print(L"[+] Found GA102 at PCI ");
+            Print(L"[+] Located GA102 at PCI ");
             PrintHex((UINT32)TargetBus);
             Print(L":");
             PrintHex((UINT32)TargetDevice);
@@ -101,38 +108,97 @@ efi_main (
             PrintHex((UINT32)TargetFunction);
             Print(L"\r\n");
 
-            Print(L"    Vendor ID: ");
-            PrintHex(PciConfig.Hdr.VendorId);
-            Print(L"  Device ID: ");
-            PrintHex(PciConfig.Hdr.DeviceId);
-            Print(L"\r\n");
-
             UINT32 Subsys = ((UINT32)PciConfig.Device.SubsystemID << 16) | PciConfig.Device.SubsystemVendorID;
-            Print(L"    Subsystem: ");
+            Print(L"    Subsystem ID: ");
             PrintHex(Subsys);
             Print(L"\r\n");
-
-            Print(L"[*] Pre-flight Invariant Check:\r\n");
-            Print(L"    - Primary display adapter status: DETECTED (Console Active)\r\n");
-            Print(L"    - Notice: Motherboard root port hangs if FLR occurs on console display.\r\n");
-            Print(L"    - Safety: FLR suppressed to protect bus arbitration.\r\n");
             break;
         }
     }
 
-    if (!FoundTarget) {
+    if (!FoundTarget || !TargetPciIo) {
         Print(L"[!] GA102 not found on PCI bus.\r\n");
+        if (HandleBuffer) gBS->FreePool(HandleBuffer);
+        return EFI_NOT_FOUND;
+    }
+
+    // Enable Memory Space decode if not already enabled
+    UINT16 Command;
+    Status = TargetPciIo->Pci.Read(TargetPciIo, EfiPciIoWidthUint16, PCI_COMMAND_OFFSET, 1, &Command);
+    if (!EFI_ERROR(Status) && !(Command & EFI_PCI_COMMAND_MEMORY_SPACE)) {
+        Command |= EFI_PCI_COMMAND_MEMORY_SPACE;
+        TargetPciIo->Pci.Write(TargetPciIo, EfiPciIoWidthUint16, PCI_COMMAND_OFFSET, 1, &Command);
+        Print(L"[*] Enabled PCI Memory Space decode on GA102.\r\n");
+    }
+
+    Print(L"[*] Probing BAR0 MMIO Speed Selector Registers...\r\n");
+
+    // Read current SS0 (0x0082381c) and SS1 (0x00823820)
+    UINT32 Ss0_Before = 0, Ss1_Before = 0;
+    Status = TargetPciIo->Mem.Read(
+        TargetPciIo,
+        EfiPciIoWidthUint32,
+        0, // BAR0
+        GU_FEAT_SS0_OFFSET,
+        1,
+        &Ss0_Before
+    );
+
+    Status = TargetPciIo->Mem.Read(
+        TargetPciIo,
+        EfiPciIoWidthUint32,
+        0, // BAR0
+        GU_FEAT_SS1_OFFSET,
+        1,
+        &Ss1_Before
+    );
+
+    Print(L"    Current SS0 (Instruction Issue Selector): ");
+    PrintHex(Ss0_Before);
+    Print(L"\r\n");
+
+    Print(L"    Current SS1 (IMLA4 Selector):            ");
+    PrintHex(Ss1_Before);
+    Print(L"\r\n");
+
+    if (Ss0_Before == GU_SS0_UNLOCK && Ss1_Before == GU_SS1_UNLOCK) {
+        Print(L"[SUCCESS] Hardware is ALREADY UNLOCKED (SS0=0x88888888, SS1=0x8)!\r\n");
+    } else {
+        Print(L"[*] Attempting non-destructive Speed Selector write...\r\n");
+        UINT32 TargetSS0 = GU_SS0_UNLOCK;
+        UINT32 TargetSS1 = GU_SS1_UNLOCK;
+
+        TargetPciIo->Mem.Write(TargetPciIo, EfiPciIoWidthUint32, 0, GU_FEAT_SS0_OFFSET, 1, &TargetSS0);
+        TargetPciIo->Mem.Write(TargetPciIo, EfiPciIoWidthUint32, 0, GU_FEAT_SS1_OFFSET, 1, &TargetSS1);
+
+        UINT32 Ss0_After = 0, Ss1_After = 0;
+        TargetPciIo->Mem.Read(TargetPciIo, EfiPciIoWidthUint32, 0, GU_FEAT_SS0_OFFSET, 1, &Ss0_After);
+        TargetPciIo->Mem.Read(TargetPciIo, EfiPciIoWidthUint32, 0, GU_FEAT_SS1_OFFSET, 1, &Ss1_After);
+
+        Print(L"    Post-Write SS0: ");
+        PrintHex(Ss0_After);
+        Print(L"\r\n");
+
+        Print(L"    Post-Write SS1: ");
+        PrintHex(Ss1_After);
+        Print(L"\r\n");
+
+        if (Ss0_After == GU_SS0_UNLOCK) {
+            Print(L"[+] Direct write ACCEPTED by hardware!\r\n");
+        } else {
+            Print(L"[-] Note: Direct write locked until Falcon SEC2/WPR microcode completes.\r\n");
+        }
     }
 
     if (HandleBuffer) {
         gBS->FreePool(HandleBuffer);
     }
 
-    Print(L"\r\n[*] Disarming watchdog before chainloading OS...\r\n");
+    Print(L"\r\n[*] Disarming watchdog timer...\r\n");
     gBS->SetWatchdogTimer(0, 0x0000, 0, NULL);
 
-    Print(L"[*] Chainloading system GRUB bootloader in 3 seconds...\r\n");
-    gBS->Stall(3000000);
+    Print(L"[*] Finished. Exiting to boot manager in 5 seconds...\r\n");
+    gBS->Stall(5000000);
 
     return EFI_SUCCESS;
 }
