@@ -1,26 +1,34 @@
 #!/usr/bin/env bash
-# /usr/local/sbin/gpu-unlock-postmount.sh
-# Controlled fail-safe post-mount executor for gpu_unlock.ko
 set -euo pipefail
 
 LOG="/var/log/gpu_unlock_postmount.log"
 ARM_FILE="/var/lib/gpu_unlock_arm"
+GRUB_BACKUP="/etc/default/grub.bak_path1"
+GRUB_DEFAULT="/etc/default/grub"
 
 exec > "$LOG" 2>&1
 echo "=== Boot Timestamp: $(date -Iseconds) ==="
+
+# RESTORE INVARIANT:
+# Automatically restore /etc/default/grub immediately on boot so subsequent boots are 100% normal stock.
+if [ -f "$GRUB_BACKUP" ]; then
+    echo "Restoring clean /etc/default/grub from backup..."
+    cp "$GRUB_BACKUP" "$GRUB_DEFAULT"
+    update-grub || true
+    rm -f "$GRUB_BACKUP"
+    sync
+fi
 
 # Check if armed
 if [[ ! -f "$ARM_FILE" ]]; then
     echo "Disarmed state detected (ARM file not present)."
     echo "Loading standard unmodified NVIDIA driver stack..."
     modprobe nvidia_drm modeset=1 fbdev=1 || true
-    echo "Standard driver loaded. Exiting."
     exit 0
 fi
 
 # FAIL-SAFE INVARIANT:
 # Delete the arming file and commit filesystem metadata to NVMe BEFORE touching hardware.
-# If pcie_flr() freezes the bus, the next boot is guaranteed to find no ARM file.
 echo "ARMED RUN DETECTED. Executing immediate disarm and sync..."
 rm -f "$ARM_FILE"
 sync
