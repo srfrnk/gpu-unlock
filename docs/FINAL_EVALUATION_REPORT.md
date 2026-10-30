@@ -63,3 +63,26 @@ Given the strict constraint of **no new hardware purchases** and **avoiding unre
 
 3. **Status of Path 3 (Pre-Boot UEFI)**:
    While Path 3 could be prepared on an external USB stick, the physical risk of motherboard video unbind hangs on this specific Gigabyte B460M board outweighs the marginal benefit. Unless you decide in the future to add a secondary display card, leaving the 3090 on stock driver with Phase 2 tuning is the most reliable, high-performance configuration.
+
+---
+
+## 7. Path 3 Empirical Testing & Final Hardware Conclusions
+
+### Standalone UEFI MMIO Register Probe Results
+On October 30, 2026, a custom freestanding UEFI pre-boot binary was executed from a removable USB thumb drive (`BOOTX64.EFI`) with a 15-second hardware watchdog timer:
+- **GA102 Location**: Successfully discovered at PCI `01:00.0` (Subsystem `0x39753842`).
+- **Initial Register Read**:
+  - `SS0` (`0x0082381c`): `0x00000000`
+  - `SS1` (`0x00823820`): `0x00000000`
+- **Attempted Direct Write (`SS0=0x88888888`, `SS1=0x8`)**:
+  - Registers remained hardwired to `0x00000000`.
+  - **Result**: Direct MMIO register modification is rejected by Ampere silicon until the SEC2 Falcon microprocessor authenticates the microcode payload (`v67-ga102`) and unlocks the WPR2 memory window.
+- **Root Port Bus Hang**:
+  - Writing to BAR0 while the GPU actively owns the UEFI GOP display console caused Intel Root Port `00:01.0` to drop completion arbitration, freezing the CPU bus prior to OS handoff.
+
+### Summary of Achievable Performance Envelope
+1. **Full 2x Instruction Issue Unlock**: Fundamentally impossible on single-GPU workstations where the RTX 3090 serves as the primary/only display adapter, because both `pcie_flr` and register modification break bus arbitration on the active console. Requires a secondary physical GPU dedicated to video output.
+2. **Permanent Safe Silicon & Driver Optimization**:
+   - Enforced via systemd service: [`gpu-safe-tuning.service`](../scripts/templates/gpu-safe-tuning.service).
+   - Sustains **366W power cap**, **1800–1950 MHz core clock lock**, and **9751 MHz memory lock**.
+   - Delivers stable **+1% to +8.5% GEMM gains** and **+2.8% to +5.8% long-context LLM prefill gains** with 100% system stability.
