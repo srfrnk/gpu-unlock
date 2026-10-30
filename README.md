@@ -205,3 +205,21 @@ ETH: 0xf4eee937937f92038D70B16AbD7736D8a53a1c5c
 BTC: bc1qwpkwp70fn76z3s4kg2l9y3j4kst95twcznuugf
 
 SOL: 8Rih6HY7V4LcdjYHz4iSffT4fTniqw5CACaBigSVxNYu
+---
+
+## Pre-Boot & Host-Specific Tooling (Gigabyte B460M / Intel 10th Gen)
+
+Detailed findings and custom scripts created for hosts with Intel Root Port bus arbitration limits (such as Gigabyte B460M D3H with RTX 3090 as the sole display adapter):
+
+### 1. Safe Silicon & Driver Optimization (Phase 2)
+Provides stable +1% to +8.5% GEMM gains and +1% to +2.3% LLM ingest throughput with 100% stability and zero PCIe bus lockup risk:
+- Script: `sudo ./scripts/apply_safe_tuning.sh` (locks clocks to 1800-1950 MHz, memory to 9751 MHz, power to 366W).
+- Reset: `sudo ./scripts/reset_safe_tuning.sh`
+- Optional boot persistence: `sudo ./scripts/install_safe_tuning_service.sh`
+
+### 2. Path 3: UEFI Pre-Boot Unlocker & Sandboxed USB Runner
+Builds a freestanding x86-64 PE32+ EFI application (`BOOTX64.EFI`) that runs prior to OS boot with a 15-second hardware watchdog timer:
+- Builder directory: `uefi_builder/`
+- USB bundle staging script: `./scripts/build_path3_usb_bundle.sh [USB_MOUNT_PATH]`
+- Staged output: `dist/path3_usb/EFI/BOOT/BOOTX64.EFI` and `startup.nsh`
+- Complete evaluation: See [docs/FINAL_EVALUATION_REPORT.md](docs/FINAL_EVALUATION_REPORT.md).

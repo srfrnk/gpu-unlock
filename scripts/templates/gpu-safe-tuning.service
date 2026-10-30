@@ -1,0 +1,13 @@
+[Unit]
+Description=GPU Safe Silicon & Driver Tuning Service
+After=multi-user.target
+Wants=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/mnt/data/code/gpu-unlock/scripts/apply_safe_tuning.sh
+RemainAfterExit=yes
+TimeoutSec=30
+
+[Install]
+WantedBy=multi-user.target

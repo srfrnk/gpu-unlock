@@ -25,3 +25,4 @@
 /debian/gpu-unlock-*/
 modules.order
 Module.symvers
+uefi_src/
