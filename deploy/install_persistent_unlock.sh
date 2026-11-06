@@ -19,11 +19,23 @@ ROOT_UUID=$(findmnt -n -o UUID /)
 echo "==> Deploying GPU Unlock from: $REPO_DIR"
 echo "==> Target Kernel: $KVER"
 
-# 1. Install authenticated firmware assets
+# 1. Ensure firmware assets exist (check /lib/firmware, cache, or run make assets)
 FIRMWARE_DIR="/lib/firmware/gpu-unlock/610.43.03"
 mkdir -p "$FIRMWARE_DIR"
-cp -r "$REPO_DIR/firmware/authenticated/610.43.03/"* "$FIRMWARE_DIR/"
-echo "==> [1/4] Firmware assets installed to $FIRMWARE_DIR"
+
+if [ -f "$FIRMWARE_DIR/booter_load_ga102.bin" ]; then
+    echo "==> [1/4] Firmware assets already present in $FIRMWARE_DIR"
+elif [ -d "$HOME/.cache/gpu-unlock/assets" ] && [ -f "$HOME/.cache/gpu-unlock/assets/booter_load_ga102.bin" ]; then
+    cp -v "$HOME/.cache/gpu-unlock/assets/"*.bin "$FIRMWARE_DIR/"
+    echo "==> [1/4] Firmware assets copied from cache to $FIRMWARE_DIR"
+elif [ -d "/home/shahar/.cache/gpu-unlock/assets" ] && [ -f "/home/shahar/.cache/gpu-unlock/assets/booter_load_ga102.bin" ]; then
+    cp -v "/home/shahar/.cache/gpu-unlock/assets/"*.bin "$FIRMWARE_DIR/"
+    echo "==> [1/4] Firmware assets copied from user cache to $FIRMWARE_DIR"
+else
+    echo "==> [1/4] Generating firmware assets via make assets..."
+    make -C "$REPO_DIR" assets
+    cp -v "$HOME/.cache/gpu-unlock/assets/"*.bin "$FIRMWARE_DIR/"
+fi
 
 # 2. Build and install kernel module
 SRC="$REPO_DIR/kernel/gpu_unlock"
