@@ -13,8 +13,6 @@ fi
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 KVER="$(uname -r)"
-BOOT_UUID=$(findmnt -n -o UUID /boot 2>/dev/null || findmnt -n -o UUID /)
-ROOT_UUID=$(findmnt -n -o UUID /)
 
 echo "==> Deploying GPU Unlock from: $REPO_DIR"
 echo "==> Target Kernel: $KVER"
@@ -85,11 +83,11 @@ echo "==> [3/4] Kernel post-install hook installed at /etc/kernel/postinst.d/zz-
 # 4. Generate unlocked initramfs for current kernel
 /etc/kernel/postinst.d/zz-gpu-unlock "$KVER"
 
-# 5. Configure GRUB menu (Ubuntu default = Unlocked, second = Safe Stock)
-cat << 'GRUB_CFG' > /etc/grub.d/09_gpu_unlock
+# 5. Configure dynamic GRUB generator script (outputs exact valid GRUB config to stdout)
+cat << 'SCRIPT' > /etc/grub.d/09_gpu_unlock
 #!/bin/sh
-exec tail -n +3 $0
-# Dynamic GPU Unlock Boot Generator
+set -e
+
 LATEST_VMLINUZ=$(ls -1 /boot/vmlinuz-* 2>/dev/null | grep -v 'rescue' | sort -V | tail -n 1)
 LATEST_KVER=$(basename "$LATEST_VMLINUZ" | sed 's/vmlinuz-//')
 BOOT_UUID=$(findmnt -n -o UUID /boot 2>/dev/null || findmnt -n -o UUID /)
@@ -101,7 +99,8 @@ else
     UNLOCKED_INITRD="/initrd.img-${LATEST_KVER}"
 fi
 
-menuentry 'Ubuntu' --class ubuntu --class gnu-linux --class gnu --class os $menuentry_id_option 'gnulinux-simple-unlocked' {
+cat << ENTRY
+menuentry 'Ubuntu' --class ubuntu --class gnu-linux --class gnu --class os {
 	recordfail
 	load_video
 	insmod gzio
@@ -112,7 +111,7 @@ menuentry 'Ubuntu' --class ubuntu --class gnu-linux --class gnu --class os $menu
 	initrd	${UNLOCKED_INITRD}
 }
 
-menuentry 'Ubuntu Safe No GPU Unlock' --class ubuntu --class gnu-linux --class gnu --class os $menuentry_id_option 'gnulinux-simple-stock-safe' {
+menuentry 'Ubuntu Safe No GPU Unlock' --class ubuntu --class gnu-linux --class gnu --class os {
 	recordfail
 	load_video
 	insmod gzio
@@ -122,10 +121,11 @@ menuentry 'Ubuntu Safe No GPU Unlock' --class ubuntu --class gnu-linux --class g
 	linux	/vmlinuz-${LATEST_KVER} root=UUID=${ROOT_UUID} ro quiet splash rootdelay=10 pcie_port_pm=off pcie_aspm.policy=performance
 	initrd	/initrd.img-${LATEST_KVER}
 }
-GRUB_CFG
+ENTRY
+SCRIPT
 chmod +x /etc/grub.d/09_gpu_unlock
 
-# Ensure 40_custom is clean
+# Clean 40_custom
 cat << 'EMPTY' > /etc/grub.d/40_custom
 #!/bin/sh
 exec tail -n +3 $0
