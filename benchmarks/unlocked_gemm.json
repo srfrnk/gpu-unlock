@@ -1,0 +1,42 @@
+{
+  "device_name": "NVIDIA GeForce RTX 3090",
+  "status": "unlocked",
+  "benchmarks": {
+    "BF16": [
+      {
+        "shape": "4096",
+        "tflops": 124.01
+      },
+      {
+        "shape": "8192",
+        "tflops": 118.4
+      }
+    ],
+    "FP16": [
+      {
+        "shape": "4096",
+        "tflops": 126.3
+      },
+      {
+        "shape": "8192",
+        "tflops": 113.51
+      }
+    ],
+    "TF32": [
+      {
+        "shape": "4096",
+        "tflops": 58.5
+      },
+      {
+        "shape": "8192",
+        "tflops": 63.94
+      }
+    ],
+    "FP32": [
+      {
+        "shape": "8192",
+        "tflops": 24.89
+      }
+    ]
+  }
+}
